@@ -1,0 +1,9 @@
+# Format: id|isbn|title|author
+id|isbn|title|author
+BOOK-001|978-0134685991|Effective Java|Joshua Bloch
+BOOK-002|978-1492078005|Head First Design Patterns|Eric Freeman
+BOOK-003|978-0135398579|Clean Code|Robert C. Martin
+BOOK-004|978-0135558577|Core Java Volume I: Fundamentals|Cay S. Horstmann
+BOOK-007|978-0133970777|Fundamental Of Database Systems|Elmasri, Navathe
+BOOK-009|978-9351199250|Core Java: An Integrated Approach|R. Nageswara Rao
+BOOK-012|978-0133795868|Core JavaServer Faces|Cay S. Horstmann, David M. Geary
