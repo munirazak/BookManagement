@@ -1,8 +1,10 @@
 package com.kopibru.bookmanagement.controller;
 
 import com.kopibru.bookmanagement.dto.BookDto;
+import com.kopibru.bookmanagement.dto.BorrowRequest;
 import com.kopibru.bookmanagement.exception.GlobalExceptionHandler;
 import com.kopibru.bookmanagement.model.BookStatus;
+import com.kopibru.bookmanagement.service.BookCatalogService;
 import com.kopibru.bookmanagement.service.BookRegistrationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -17,7 +19,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -36,6 +42,9 @@ class BookControllerTest {
     @MockBean
     private BookRegistrationService bookRegistrationService;
 
+    @MockBean
+    private BookCatalogService bookCatalogService;
+
     @Test
     void registerBook_returnsCreated() throws Exception {
         BookDto book = new BookDto("BOOK-001", "978-1", "Title", "Author", BookStatus.AVAILABLE, null);
@@ -49,15 +58,41 @@ class BookControllerTest {
     }
 
     @Test
-    void registerBook_returnsBadRequestWhenInvalid() throws Exception {
-        String body = """
-                {"id":"","isbn":"","title":"","author":""}
-                """;
+    void getBooks_returnsOk() throws Exception {
+        when(bookCatalogService.getBooks(eq("available"), anyBoolean())).thenReturn(List.of(
+                new BookDto("BOOK-001", "978-1", "Title", "Author", BookStatus.AVAILABLE, null)));
 
-        mockMvc.perform(post("/api/books")
+        mockMvc.perform(get("/api/books").param("status", "available"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].status").value("AVAILABLE"));
+    }
+
+    @Test
+    void borrowBook_returnsOk() throws Exception {
+        BorrowRequest request = new BorrowRequest("LIB-001");
+        BookDto response = new BookDto(
+                "BOOK-001", "978-1", "Title", "Author", BookStatus.BORROWED, "LIB-001");
+        when(bookCatalogService.borrow(eq("BOOK-001"), any(BorrowRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/books/BOOK-001/borrow")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isBadRequest());
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.libraryId").value("LIB-001"));
+    }
+
+    @Test
+    void returnBook_returnsOk() throws Exception {
+        BorrowRequest request = new BorrowRequest("LIB-001");
+        BookDto response = new BookDto(
+                "BOOK-001", "978-1", "Title", "Author", BookStatus.AVAILABLE, null);
+        when(bookCatalogService.returnBook(eq("BOOK-001"), any(BorrowRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/books/BOOK-001/return")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("AVAILABLE"));
     }
 
     @Test
