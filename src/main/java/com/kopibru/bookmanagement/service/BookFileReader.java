@@ -3,6 +3,8 @@ package com.kopibru.bookmanagement.service;
 import com.kopibru.bookmanagement.dto.BookDto;
 import com.kopibru.bookmanagement.exception.InvalidBookFileException;
 import com.kopibru.bookmanagement.model.BookStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -17,10 +19,13 @@ import java.util.Set;
 @Component
 public class BookFileReader {
 
+    private static final Logger log = LoggerFactory.getLogger(BookFileReader.class);
+
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".txt", ".dat");
     private static final String DELIMITER = "\\|";
 
     public List<BookDto> read(MultipartFile file) {
+        log.info("Reading book file filename={}", file != null ? file.getOriginalFilename() : null);
         validateFile(file);
 
         List<BookDto> books = new ArrayList<>();
@@ -49,6 +54,7 @@ public class BookFileReader {
         if (books.isEmpty()) {
             throw new InvalidBookFileException("Book file contains no book records");
         }
+        log.info("Parsed {} books from file={}", books.size(), file.getOriginalFilename());
         return books;
     }
 
