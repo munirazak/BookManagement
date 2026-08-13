@@ -10,6 +10,8 @@ import com.kopibru.bookmanagement.model.BookCopy;
 import com.kopibru.bookmanagement.model.BookDetail;
 import com.kopibru.bookmanagement.model.BookStatus;
 import com.kopibru.bookmanagement.repository.BookCopyRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +21,8 @@ import java.util.Locale;
 @Service
 public class BookCatalogService {
 
+    private static final Logger log = LoggerFactory.getLogger(BookCatalogService.class);
+
     private final BookCopyRepository bookCopyRepository;
 
     public BookCatalogService(BookCopyRepository bookCopyRepository) {
@@ -26,14 +30,18 @@ public class BookCatalogService {
     }
 
     public List<BookDto> getBooks(String statusFilter, boolean includeLibraryId) {
+        log.info("Listing books statusFilter={} includeLibraryId={}", statusFilter, includeLibraryId);
         List<BookCopy> copies = findCopiesByStatusFilter(statusFilter);
-        return copies.stream()
+        List<BookDto> books = copies.stream()
                 .map(copy -> toDto(copy, copy.getBookDetail(), includeLibraryId))
                 .toList();
+        log.info("Listed {} books for statusFilter={}", books.size(), statusFilter);
+        return books;
     }
 
     @Transactional
     public BookDto borrow(String bookId, BorrowRequest request) {
+        log.info("Borrowing bookId={} libraryId={}", bookId, request.getLibraryId());
         BookCopy copy = bookCopyRepository.findByIdWithDetailForUpdate(bookId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Book copy with id '" + bookId + "' not found"));
@@ -46,11 +54,13 @@ public class BookCatalogService {
         copy.setLibraryId(request.getLibraryId());
         copy.setStatus(BookStatus.BORROWED);
         BookCopy saved = bookCopyRepository.save(copy);
+        log.info("Borrowed bookId={} libraryId={}", bookId, request.getLibraryId());
         return toDto(saved, saved.getBookDetail(), true);
     }
 
     @Transactional
     public BookDto returnBook(String bookId, BorrowRequest request) {
+        log.info("Returning bookId={} libraryId={}", bookId, request.getLibraryId());
         BookCopy copy = bookCopyRepository.findByIdWithDetailForUpdate(bookId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Book copy with id '" + bookId + "' not found"));
@@ -65,6 +75,7 @@ public class BookCatalogService {
         copy.setLibraryId(null);
         copy.setStatus(BookStatus.AVAILABLE);
         BookCopy saved = bookCopyRepository.save(copy);
+        log.info("Returned bookId={} libraryId={}", bookId, request.getLibraryId());
         return toDto(saved, saved.getBookDetail(), false);
     }
 

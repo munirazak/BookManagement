@@ -7,6 +7,8 @@ import com.kopibru.bookmanagement.model.BookDetail;
 import com.kopibru.bookmanagement.model.BookStatus;
 import com.kopibru.bookmanagement.repository.BookCopyRepository;
 import com.kopibru.bookmanagement.repository.BookDetailRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,6 +18,8 @@ import java.util.List;
 
 @Service
 public class BookRegistrationService {
+
+    private static final Logger log = LoggerFactory.getLogger(BookRegistrationService.class);
 
     private final BookDetailRepository bookDetailRepository;
     private final BookCopyRepository bookCopyRepository;
@@ -32,6 +36,7 @@ public class BookRegistrationService {
 
     @Transactional
     public BookDto register(BookDto book) {
+        log.info("Registering book id={} isbn={}", book.getId(), book.getIsbn());
         if (bookCopyRepository.existsById(book.getId())) {
             throw new DuplicateBookException(
                     "Book copy with id '" + book.getId() + "' already exists");
@@ -44,16 +49,19 @@ public class BookRegistrationService {
 
         BookStatus status = book.getStatus() != null ? book.getStatus() : BookStatus.AVAILABLE;
         BookCopy copy = bookCopyRepository.save(new BookCopy(book.getId(), detail, status));
+        log.info("Registered book id={} isbn={} status={}", copy.getId(), detail.getIsbn(), copy.getStatus());
         return toDto(copy, detail);
     }
 
     @Transactional
     public List<BookDto> readBooksFromFile(MultipartFile file) {
+        log.info("Importing books from file={}", file.getOriginalFilename());
         List<BookDto> booksFromFile = bookFileReader.read(file);
         List<BookDto> savedBooks = new ArrayList<>();
         for (BookDto book : booksFromFile) {
             savedBooks.add(register(book));
         }
+        log.info("Imported {} books from file={}", savedBooks.size(), file.getOriginalFilename());
         return savedBooks;
     }
 
