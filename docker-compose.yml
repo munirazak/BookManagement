@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bookmanagement-db
+    environment:
+      POSTGRES_DB: book_catalogue
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      # Unique host port so this stack can run beside UserManagement / IndexShelf
+      - "5433:5432"
+    volumes:
+      - bookmanagement_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d book_catalogue"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bookmanagement-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/book_catalogue
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+
+volumes:
+  bookmanagement_pg_data:

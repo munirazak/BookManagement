@@ -10,8 +10,42 @@ IndexShelf calls these APIs over HTTP for list / borrow / return (it no longer a
 
 ## Run
 
+### Option A — Local (Maven)
+
 ```bash
+# Dev profile (default) — requires local PostgreSQL
 mvn spring-boot:run
+
+# Prod profile
+mvn spring-boot:run -Dspring-boot.run.profiles=prod
+```
+
+### Option B — Docker Compose (app + Postgres)
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- PostgreSQL on host port `5433` (container still uses `5432`)
+- BookManagement API on port `8081` (`prod` profile)
+
+Stop with `docker compose down` (add `-v` to also remove the DB volume).
+
+Base URL: `http://localhost:8081`
+
+### CI/CD (GitHub Actions)
+
+Declarative pipeline in `.github/workflows/ci.yml`:
+
+1. On push/PR to `main`: run `mvn verify` (tests + coverage gate)
+2. On push to `main`: build and publish the Docker image to GitHub Container Registry (`ghcr.io`)
+
+Pull the published image (after a successful push to `main`):
+
+```bash
+docker pull ghcr.io/<your-github-username>/bookmanagement:latest
 ```
 
 ## APIs
