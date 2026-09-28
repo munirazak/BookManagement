@@ -35,6 +35,28 @@ Stop with `docker compose down` (add `-v` to also remove the DB volume).
 
 Base URL: `http://localhost:8081`
 
+### Port and profile (local vs GCP)
+
+| Setting | Local default | Production / GCP |
+|---------|---------------|------------------|
+| Port | `8081` (`PORT` unset) | Set env `PORT` (Cloud Run sets this, often `8080`) |
+| Profile | `dev` | Set env `SPRING_PROFILES_ACTIVE=prod` |
+
+`application.properties` uses:
+
+```properties
+server.port=${PORT:8081}
+spring.profiles.active=${SPRING_PROFILES_ACTIVE:dev}
+```
+
+On GCP (Cloud Run / GKE), configure env vars such as:
+
+- `SPRING_PROFILES_ACTIVE=prod`
+- `PORT` — leave to Google, or set explicitly
+- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` — Cloud SQL / Postgres connection
+
+Do **not** bake `prod` into the JAR; keep `dev` as the file default and override with env in production.
+
 ### CI/CD (GitHub Actions)
 
 Declarative pipeline in `.github/workflows/ci.yml`:
