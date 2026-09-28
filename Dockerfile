@@ -18,6 +18,7 @@ COPY --from=build --chown=app:app /app/target/BookManagement-0.0.1-SNAPSHOT.jar 
 
 USER app
 
+# Default local/Docker port. GCP Cloud Run injects PORT at runtime.
 EXPOSE 8081
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
