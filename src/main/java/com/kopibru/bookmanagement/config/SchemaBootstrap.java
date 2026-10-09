@@ -5,6 +5,7 @@ import org.springframework.context.ApplicationListener;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.util.StreamUtils;
+import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
@@ -16,8 +17,11 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * Ensures the database from {@code spring.datasource.url} exists, then runs
- * table DDL from {@code schema.sql} against that database.
+ * Ensures the database from {@code spring.datasource.url} exists (local/Docker TCP only),
+ * then runs table DDL from {@code schema.sql}.
+ * <p>
+ * Cloud Run → Cloud SQL uses the Java Connector ({@code cloudSqlInstance}). In that case
+ * {@code CREATE DATABASE} is skipped — create the database in Cloud SQL Console first.
  */
 public class SchemaBootstrap implements ApplicationListener<ApplicationEnvironmentPreparedEvent> {
 
@@ -26,23 +30,87 @@ public class SchemaBootstrap implements ApplicationListener<ApplicationEnvironme
     @Override
     public void onApplicationEvent(ApplicationEnvironmentPreparedEvent event) {
         Environment env = event.getEnvironment();
+        if (!env.getProperty("app.schema-bootstrap.enabled", Boolean.class, true)) {
+            return;
+        }
+
         String jdbcUrl = env.getRequiredProperty("spring.datasource.url");
         String username = env.getRequiredProperty("spring.datasource.username");
         String password = env.getProperty("spring.datasource.password", "");
+
+        validateCloudRunDatasource(env, jdbcUrl);
 
         String databaseName = extractDatabaseName(jdbcUrl);
         if (!SAFE_DB_NAME.matcher(databaseName).matches()) {
             throw new IllegalStateException("Unsafe database name in datasource URL: " + databaseName);
         }
 
-        String adminUrl = jdbcUrl.substring(0, jdbcUrl.lastIndexOf('/') + 1) + "postgres";
+        boolean cloudSql = isCloudSqlConnectorUrl(jdbcUrl);
 
         try {
-            ensureDatabaseExists(adminUrl, username, password, databaseName);
+            if (!cloudSql) {
+                String adminUrl = buildAdminUrl(jdbcUrl);
+                ensureDatabaseExists(adminUrl, username, password, databaseName);
+            }
             executeSchemaScript(jdbcUrl, username, password);
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to initialize database schema", ex);
         }
+    }
+
+    /**
+     * Fail fast on Cloud Run when prod still points at localhost (missing CLOUD_SQL_INSTANCE).
+     */
+    private void validateCloudRunDatasource(Environment env, String jdbcUrl) {
+        boolean prod = false;
+        for (String profile : env.getActiveProfiles()) {
+            if ("prod".equalsIgnoreCase(profile)) {
+                prod = true;
+                break;
+            }
+        }
+        if (!prod) {
+            return;
+        }
+
+        String lower = jdbcUrl.toLowerCase();
+        if (lower.contains("localhost") || lower.contains("127.0.0.1")) {
+            throw new IllegalStateException(
+                    "Prod datasource points at localhost. On Cloud Run set CLOUD_SQL_INSTANCE="
+                            + "project:region:instance (and do not set DB_URL to localhost). "
+                            + "Example JDBC default: jdbc:postgresql:///book_catalogue"
+                            + "?cloudSqlInstance=PROJECT:REGION:INSTANCE"
+                            + "&socketFactory=com.google.cloud.sql.postgres.SocketFactory");
+        }
+
+        if (isCloudSqlConnectorUrl(jdbcUrl)) {
+            String instance = env.getProperty("CLOUD_SQL_INSTANCE", "");
+            if (!StringUtils.hasText(instance) && !jdbcUrl.matches("(?i).*cloudSqlInstance=[^&]+.*")) {
+                throw new IllegalStateException(
+                        "CLOUD_SQL_INSTANCE is required for Cloud SQL Java Connector "
+                                + "(format: project:region:instance).");
+            }
+            // Empty cloudSqlInstance= in URL
+            if (lower.contains("cloudsqlinstance=&") || lower.endsWith("cloudsqlinstance=")) {
+                throw new IllegalStateException(
+                        "CLOUD_SQL_INSTANCE is empty. Set it to your Cloud SQL instance "
+                                + "connection name (project:region:instance).");
+            }
+        }
+    }
+
+    private boolean isCloudSqlConnectorUrl(String jdbcUrl) {
+        String lower = jdbcUrl.toLowerCase();
+        return lower.contains("cloudsqlinstance=")
+                || lower.contains("socketfactory=com.google.cloud.sql");
+    }
+
+    private String buildAdminUrl(String jdbcUrl) {
+        String[] parts = jdbcUrl.split("\\?", 2);
+        String base = parts[0];
+        String query = parts.length > 1 ? "?" + parts[1] : "";
+        int lastSlash = base.lastIndexOf('/');
+        return base.substring(0, lastSlash + 1) + "postgres" + query;
     }
 
     private void ensureDatabaseExists(
